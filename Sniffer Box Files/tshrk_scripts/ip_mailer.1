@@ -1,0 +1,5 @@
+#!/bin/bash
+
+MAIL1='dcochran@walser.com'
+
+echo "You can SSH into `hostname` with IP Address: "`ifconfig eth0 | grep "inet addr" | cut -d : -f 2 | awk '{ print $1}'` | mailx -r "Sniffer@`hostname`" -s "Sniffer@`hostname`'s IP" -S smtp=smtp.walser.com $MAIL1

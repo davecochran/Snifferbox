@@ -1,0 +1,8 @@
+#!/bin/bash
+
+cp /usr/local/etc/ssh/sshd_config.save /usr/local/etc/ssh/sshd_config
+
+IP="`ifconfig eth1 | grep 'inet addr:' | cut -d: -f2 | awk '{ print $1 
+}'`"
+
+echo "ListenAddress="$IP >> /usr/local/etc/ssh/sshd_config

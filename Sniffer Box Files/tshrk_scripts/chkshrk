@@ -1,0 +1,105 @@
+#!/bin/bash
+
+STARTSHARK="sudo tshark -i eth0 -l -q -b filesize:307200 -b files:207 -B 5 -w /mnt/sda2/tshrk_pcaps/captured.cap"
+LOGFILE=/etc/tshrk_logs/chkshark.log
+SERVICE='tshark'
+
+
+echo "`date` Beginning $SERVICE checkup service." >> $LOGFILE
+
+#Check if TShark is running; fix if not
+if ps ax | grep -v grep | grep $SERVICE > /dev/null
+then
+	echo "`date` Status: $SERVICE service running, everything is fine." >> $LOGFILE
+
+	else
+	echo "`date` *** Status: $SERVICE is not running, restarting $SERVICE. ***" >> $LOGFILE
+
+		# The ampersand (&) is DEEP MAGICK.  DO NOT REMOVE.
+                $STARTSHARK &
+
+		if ps ax | grep -v grep | grep $SERVICE > /dev/null
+		then
+			echo "`date` Status: $SERVICE service is now restarted, everything is okay." >> $LOGFILE
+                        echo "Tshark was dead, but is now alive" | mailx -r "CheckShark@`hostname`" -s "TShark Status Update" -S smtp=smtp.walser.com dcochran@walser.com
+                        else
+                                echo "`date` !!! Status: Unable to start $SERVICE, suggest reboot. !!!" >> $LOGFILE
+				echo "Tshark is dead and could not be restarted; suggest reboot of `hostname`" | mailx -r "CheckShark@`hostname`" -s "TShark Status Update" -S smtp=smtp.walser.com dcochran@walser.com
+		fi
+fi
+
+
+#The point of the rest of this code is to check file creation times, alert if significantly different (>= 12 hours shorter for new than for old)
+
+#First, verify that there ARE .cap files to check on (avoids errors)
+PCAPS=$(ls /mnt/sda2/tshrk_pcaps/*.cap 2>/dev/null | wc -l)
+
+if [ "$PCAPS" != "0" ]
+then
+	echo "`date` Beginning Timestamp validation." >> $LOGFILE
+	NAMES=( )
+	INCREMENT=0
+
+        #Make an array of the 3rd chunk (the time-of-creation) of the pcaps
+        for FILE in /mnt/sda2/tshrk_pcaps/*.cap
+	do
+		NAMES[$INCREMENT]=${FILE:37:14} INCREMENT=$(($INCREMENT+1))
+	done
+
+	#Convert times-of-creation to epoch (seconds since Jan. 1, 1970)
+	LENGTH=${#NAMES[@]}
+
+	for (( X = 0; X < `expr $LENGTH - 1`; X++ ))
+	do
+		#Naming the date to be converted "D" for ease of typing
+		D=${NAMES[$X]}
+
+		#Trust in the code.  The code is good.
+		#This should read as follows (redundancy is a good thing, I repeat: redundancy is a good thing):
+		#NAMES[$X]=`date -d "${D:0:4}-${D:4:2}-${D:6:2} ${D:8:2}:${D:10:2}:${D:12:2}" +%s`
+
+		NAMES[$X]=`date -d "${D:0:4}-${D:4:2}-${D:6:2} ${D:8:2}:${D:10:2}:${D:12:2}" +%s`
+	done
+
+	#Make a new array, and populate with (names[1]-names[0]), (names[2]-names[1]), etc.
+	DIFF=( )
+
+	for (( COUNTER = 0; COUNTER < `expr $LENGTH - 1`; COUNTER++ ))
+	do
+		DIFF[$COUNTER]=$((${NAMES[ (( $COUNTER + 1 )) ] } - ${NAMES[$COUNTER]}))
+	done
+
+	#Average values of diff[0] through diff[n-1]
+	SUM=0
+	AVG=0
+
+	#Can't average if there's less than 3 pcaps, so check for that. Assuming there are at least 3 pcaps, average files 0 through
+	#last-minus-one
+	if [ ${#DIFF[@]} -le 2 ]
+	then
+		echo "`date` Not enough files to average timestamps; exiting." >> $LOGFILE
+		else
+			for (( i = 0; i < `expr ${#DIFF[@]} - 1`; i++ ))
+			do
+				SUM=$(( $SUM + ${DIFF[i]} ))
+			done
+			echo "`date` Timestamp averaging complete." >> $LOGFILE
+	fi
+	AVG=$(($SUM / ${#DIFF[@]}))
+
+	#If average value minus last value >= 43200 seconds (12 hours), send email
+	LASTVAL=`expr $LENGTH - 1` TCHECK=$(($AVG - ${NAMES[$LASTVAL]}))
+
+	if [ $TCHECK -gt 43200 ]
+	then
+		echo ">>> `date` PCAPs may be filling up too fast! Check into this! <<<" >> $LOGFILE
+		echo ">>> `date` PCAPs may be filling up too fast! Check into this! <<<" | mailx -r "CheckShark@`hostname`" -s "PCAP warning" -S smtp=smtp.walser.com dcochran@walser.com
+		else
+			echo "`date` PCAP fill rate is fine. Exiting." >> $LOGFILE
+	fi
+	else
+		echo "`date` No pcap files exist; this might be a problem." >> $LOGFILE
+fi
+
+echo "`date` Exiting $SERVICE checkup service." >> $LOGFILE
+echo "------------------------------------------" >> $LOGFILE

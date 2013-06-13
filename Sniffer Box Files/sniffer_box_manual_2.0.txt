@@ -1,0 +1,232 @@
+Setting Up A Sniffer Box
+========================
+
+The first thing we want to do is set up a sniffing program, and make sure that it's
+always running.
+---
+
+01. Install "Tiny Core" Linux on a computer of your choice.
+
+02. Install TShark (a command-line version of Wireshark - www.wireshark.org).
+
+03. Pick the arguments you want to use with TShark - we ended up using the following
+argument sequence with TShark:
+        tshark -i eth0 -l -q -t ad -b filesize:307200 -b files:193 -B 5 -w
+        /mnt/sda2/tshrk_pcaps/captured.cap
+
+   Here is what each arguments does:
+        -i eth0
+                Sniffs packets with the first ethernet connection
+        -l
+                Flushes the standard output after the information for each packet is
+                printed. This means that any program to which the output is piped will
+                get to see the dissected data from each packet as soon as TShark does,
+                rather than waiting for the buffer to fill.  This is not, strictly
+                speaking, necessary for our purposes *right now*, but may become handy
+                in the future (and certainly isn't detrimental to our cause).
+        -q
+                Quiet mode - again, may not be strictly necessary, but is both a) easily
+                changed, and b) not actively detrimental.
+        -t ad
+                The timestamp format used in the summary line of each packet is
+                "absolute with date", e.g. the actual date and time the packet was
+                captured.
+        -b
+                Creates a ring buffer (write files until the buffer is full, then start
+                overwriting the oldest file; repeat ad nauseum), with the options given
+                below:
+                filesize:307200
+                        Limits each capture file's maximum filesize to 307,200 KB ( or
+                        about 300 MB).
+                files:207
+                        With the 300MB filesize, we estimate that 207 files will create
+                        a rolling three-day buffer at any given location.
+        -B 5
+                Sets the capture buffer size to 5MB (default is 1MB); this is to help
+                prevent dropped packets.
+        -w /mnt/sda2/tshrk_pcaps/captured.cap
+                Writes raw packet data to the file name given (in this case,
+                "captured.cap", in the /mnt/sda2/tshrk_pcaps directory).  With the -b
+                argument used above, each filename will also contain the date and time
+                of when it was first written (e.g. "captured_00001_20120622144403.cap"
+                indicates that the file was first written on June 22, 2012 at 14:44:03)
+
+04. Create a script to check if TShark is running, and to start it if it isn't.  We found
+one online called "checkshark", and modified it to fit our needs.  After modifying it,
+we saved the file in </etc/tshrk_scripts>.
+
+---
+Background information: Tiny Shark has a file called "/opt/bootlocal.sh" that functions
+pretty much identically to Windows' "Startup Items" folder.
+---
+
+05. Add the "Check on TShark" script (e.g. /etc/tshrk_scripts/chkshrk) to
+/opt/bootlocal.sh
+
+---
+Background information:  Linux has a 'daemon' program called "cron"; its primary duty is
+to run things (scripts, programs, etc) at specific times.  You can create tables
+(abbreviated to "tabs") to tell cron to run other things without altering the daemon's
+inherent settings.
+---
+
+06. Edit the crontab called "root" to run the "chkshrk" script at predefined intervals - 
+we chose to run it every 15 minutes, but you can set it to run once a minute if you want
+to.
+
+---
+Background information:  Tiny Core Linux has two primary differences from most other
+"flavors": It's incredibly small (hence the name), and it is mostly non-persistent.  In
+other words, most changes that you make to it will *not* be preserved when you reboot.
+There are, of course, ways around this - specifically, there are two files
+(/opt/.filetool.lst and /opt/.xfiletool.lst) that can be edited to ensure specific files
+and directories are and are not preserved.
+---
+
+07. Add "home", "etc", and "var/spool/cron/crontabs" to /opt/.filetool.lst to
+ensure that all the changes we've made will be saved when the system reboots.  "home"
+and "etc" are top-level directories in Linux, and var/spool/cron/crontabs is the
+directory that crontabs are stored in.  By adding directories, and not specific files,
+we prevent having to continually re-edit the /opt/.filetool.lst file whenever we add a
+new file or directory to our setup (as long as the file or directory is created in one
+of the listed directories).
+
+---
+Now that capturing is set up, we want to be able to SSH into the machine in
+order to pull files off the terminals without having to physically go to a location. The
+next few steps will detail that setup process.
+---
+Background information:  Tiny Core has two default users, "root" and "tc".  By default,
+neither has a password.  We want to change that before enabling SSH, in order to maintain
+the security of the system.
+---
+
+08. Give the "tc" user a password ('Password1', no quotes).  This is accomplished this by
+typing "passwd" (no quotes) into a terminal window on the Tiny Core machine.
+
+09. Add the etc/shadow file to /opt/.filetool.lst - this is the file that keeps hashes of 
+users' passwords; without the hash, the system assumes that any given user doesn't have a 
+password.
+
+10. Install the program "openSSH".  After installing it, executed the following commands:
+        cd /usr/local/etc/ssh
+        sudo cp sshd_config.example sshd_config
+        sudo /usr/local/etc/init.d/openssh start
+   In order, these commands: change the working directory to /usr/local/etc/ssh; as the
+super-user, copy the "sshd_config.example" file to the same directory as "sshd_config";
+and, as the super-user, run the program "openssh" with the "start" argument.
+
+---
+Now that SSH is up and running, you can check the IP address of the machine you're
+configuring with the "ifconfig" command, which is the equivalent of Windows' "ipconfig"
+command.
+
+The last thing to do is to finalize our setup.  The following steps will walk through
+that process.
+---
+
+11. We ended up deciding to save our pcap files to the second hard drive, which makes
+them immune to Tiny Core's persistence issues.  Unfortunately, Tiny Core doesn't mount
+that hard drive by default, so we need to add "mount /dev/sda2" to /opt/bootlocal.sh
+
+12. We noticed that by default, the pcap files are created as "read only" files, which
+prohibits copying them over to another machine through SSH.  To correct for that, we
+added the following command to both /opt/bootlocal.sh and to
+ /var/spool/cron/crontabs/root:
+        chmod -R 777 /mnt/sda2/tshrk_pcaps
+   This command modifies the permissions on the files in the /mnt/sda2/tshrk_pcaps
+directory to be readable, writeable, and executable by anyone and everyone.  When we
+modified the crontab, we told it to run this command immediately after it runs the
+chkshrk script (every 15 minutes).  In /opt/bootlocal.sh, however, we needed to pause
+before running it so that the hard drive could finish mounting.  This is accomplished by
+using the "sleep 5" command, which pauses the script for 5 seconds before proceeding.
+
+13. To make it easier to keep track of the various boxes, each new install will need to
+have its hostname changed.  In Tiny Core, this is an option that is set at boot-time.
+To change what the hostname defaults to, edit the file 
+</etc/sysconfig/tcedir/boot/extlinux/extlinux.conf>.  Find the line that starts with
+"APPEND", and add "host=hostname" (where hostname is the hostname you want to use), 
+without quotes, somewhere on that line *after* "core.gz".  This can be changed via SSH
+if necessary.
+
+14. It is important that we know if the TShark service is running.  To help monitor
+whether it is or not, we gave our sniffer box the ability to email us if TShark is 
+having problems launching.  We modified our "chkshrk" script so that if it doesn't
+see TShark's service running, it sends an email from "CheckShark@<hostname>" that
+details the problem - either a) TShark wasn't running, but was successfully restarted,
+or b) TShark could not be started, and a restart is advised.  To do this, we needed to
+install the "MailX" package, which can then be invoked as follows:
+
+	<echo "Body of message" | mailx -r "CheckShark@`hostname`" -s "SubjectLine" -S
+	smtp=smtp.walser.com recipient@walser.com>
+
+(there cannot be a line break in the command, or it will not work).  The nice thing 
+about MailX is that it does not need to be configured the way most mail systems do - it 
+accepts an SMTP server as an argument, and can use whatever "from" address you want to 
+use.
+
+15. In order to ensure that the sniffer will function regardless of which jack is
+connected to the mirror port, we added a script named "precheck" that checks the 
+output of <ifconfig>, determines which connection has an IP address, and uses that jack 
+for SSH and the other for TShark.  To make this work, we need to have two extra copies of
+the "chkshrk" script.  One is named "chkshrk.0", the other is "chkshrk.1".  Once 
+<precheck> determines which connection has an IP address, it copies the relevant 
+"chkshrk.n" file and gives it the name "chkshrk".  It then modifies the new file to be
+readable and executable by everyone.
+
+15. We also wanted the box to email us the IP address that we can use to SSH in.  To do
+this, we wrote two versions of a script, picked by the precheck script, that emails the
+IP address to an arbitrary address.
+
+========================
+
+Our /opt/bootlocal.sh file looks like this:
+
+#!/bin/sh
+# put other system startup commands here
+crond -L /dev/null 2>&1
+
+mount /dev/sda1
+mount /dev/sda2
+mount /dev/sdb1
+mount /dev/sdb2
+
+sudo mkdir /mnt/sda1/tshrk_pcaps
+
+/etc/tshrk_scripts/precheck
+/etc/tshrk_scripts/chkshrk
+
+chmod -R 777 /mnt/sda1/tshrk_pcaps
+
+/usr/local/etc/init.d/openssh start
+
+/etc/tshrk_scripts/ip_mailer
+
+
+=========================
+
+Our /opt/.filetool.lst file looks like this:
+
+opt
+home
+etc
+var/spool/cron/crontabs
+etc/shadow
+usr/local/etc/ssh
+etc/tshrk_scripts
+
+=========================
+
+Our /var/spool/cron/crontabs/root file looks like this:
+
+00 * * * * sudo /etc/tshrk_scripts/chkshrk
+00 * * * * sudo chmod -R 777 /mnt/sda2/tshrk_pcaps
+15 * * * * sudo /etc/tshrk_scripts/chkshrk
+15 * * * * sudo chmod -R 777 /mnt/sda2/tshrk_pcaps
+30 * * * * sudo /etc/tshrk_scripts/chkshrk
+30 * * * * sudo chmod -R 777 /mnt/sda2/tshrk_pcaps
+45 * * * * sudo /etc/tshrk_scripts/chkshrk
+45 * * * * sudo chmod -R 777 /mnt/sda2/tshrk_pcaps
+
+(The top line reads "at any timestamp when the minutes are "00" (e.g. 12:00, 1:00, etc), run the
+"chkshrk" script as the super-user".  Each line after follows the same pattern.)

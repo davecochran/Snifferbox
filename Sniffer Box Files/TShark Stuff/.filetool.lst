@@ -1,0 +1,8 @@
+opt
+home
+etc
+var/spool/cron/crontabs
+etc/shadow
+usr/local/etc/ssh
+etc/tshrk_scripts/chkshrk
+etc/tshrk_scripts

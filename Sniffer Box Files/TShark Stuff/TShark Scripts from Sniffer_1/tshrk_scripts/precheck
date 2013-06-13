@@ -1,0 +1,28 @@
+#!/bin/bash
+
+LOGFILE=/etc/tshrk_logs/precheck.log
+
+sleep 10s
+
+if [ -n "`ifconfig eth1 | grep 'inet addr:' | cut -d: -f2 | awk '{ print $1 }'`" ]
+then
+
+	echo "`date` - Using chkshrk0 and ipmailer0" >> $LOGFILE
+        cp /etc/tshrk_scripts/chkshrk.0 /etc/tshrk_scripts/chkshrk
+        cp /etc/tshrk_scripts/ip_mailer.0 /etc/tshrk_scripts/ip_mailer
+        chmod 755 /etc/tshrk_scripts/chkshrk
+        chmod 755 /etc/tshrk_scripts/ip_mailer
+
+elif [ -n "`ifconfig eth0 | grep 'inet addr:' | cut -d: -f2 | awk '{ print $1 }'`" ]
+then
+
+	echo "`date` - Using chkshrk1 and ipmailer1" >> $LOGFILE
+	cp /etc/tshrk_scripts/chkshrk.1 /etc/tshrk_scripts/chkshrk
+	cp /etc/tshrk_scripts/ip_mailer.1 /etc/tshrk_scripts/ip_mailer
+	chmod 755 /etc/tshrk_scripts/chkshrk
+	chmod 755 /etc/tshrk_scripts/ip_mailer
+
+else
+	echo "`date` - ABORT ABORT ABORT" >> $LOGFILE
+	echo "Ruh roh, Raggy!"
+fi

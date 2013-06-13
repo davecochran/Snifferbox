@@ -1,0 +1,8 @@
+00 * * * * sudo /etc/tshrk_scripts/chkshrk
+00 * * * * sudo chmod -R 777 /mnt/sda1/tshrk_pcaps
+15 * * * * sudo /etc/tshrk_scripts/chkshrk
+15 * * * * sudo chmod -R 777 /mnt/sda1/tshrk_pcaps
+30 * * * * sudo /etc/tshrk_scripts/chkshrk
+30 * * * * sudo chmod -R 777 /mnt/sda1/tshrk_pcaps
+45 * * * * sudo /etc/tshrk_scripts/chkshrk
+45 * * * * sudo chmod -R 777 /mnt/sda1/tshrk_pcaps
